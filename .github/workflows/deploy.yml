@@ -1,0 +1,34 @@
+name: Deploy front to VPS
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: nexera-front-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+            cd "${{ secrets.DEPLOY_PATH }}"
+            git -C front fetch origin
+            git -C front checkout -B main origin/main
+            # Keep Dockerfile if not yet on main (bootstrap asset)
+            if [ ! -f front/Dockerfile ] && [ -f assets/front-Dockerfile ]; then
+              cp assets/front-Dockerfile front/Dockerfile
+              cp assets/front-dockerignore front/.dockerignore || true
+            fi
+            docker compose up -d --build web
+            docker compose up -d caddy
+            docker compose ps
